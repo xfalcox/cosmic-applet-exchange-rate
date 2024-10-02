@@ -6,7 +6,14 @@ use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::iced_style::application;
 use cosmic::widget::{self, settings};
+use cosmic::widget::{TextInput};
 use cosmic::{Application, Element, Theme};
+use reqwest::Error;
+use serde_json::Value;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+use tokio::runtime::Runtime;
 
 use crate::fl;
 
@@ -18,8 +25,10 @@ pub struct YourApp {
     core: Core,
     /// The popup id.
     popup: Option<Id>,
-    /// Example row toggler.
-    example_row: bool,
+    // Add a state for the text input
+    input_value: String,
+    // Add a state for the exchange rate
+    exchange_rate: Arc<Mutex<String>>,
 }
 
 /// This is the enum that contains all the possible variants that your application will need to transmit messages.
@@ -29,7 +38,7 @@ pub struct YourApp {
 pub enum Message {
     TogglePopup,
     PopupClosed(Id),
-    ToggleExampleRow(bool),
+    InputChanged(String),
 }
 
 /// Implement the `Application` trait for your application.
@@ -67,8 +76,27 @@ impl Application for YourApp {
     fn init(core: Core, _flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let app = YourApp {
             core,
+            input_value: "USDBRL".to_string(), // Set default value here
             ..Default::default()
         };
+
+        let exchange_rate = Arc::clone(&app.exchange_rate);
+        let input_value = app.input_value.clone();
+        thread::spawn(move || {
+            let rt = Runtime::new().unwrap();
+            loop {
+                rt.block_on(async {
+                    match fetch_exchange_rate(&input_value).await {
+                        Ok(rate) => {
+                            let mut exchange_rate = exchange_rate.lock().unwrap();
+                            *exchange_rate = rate.trim_matches('"').to_string();
+                        }
+                        Err(e) => eprintln!("Error fetching exchange rate: {:?}", e),
+                    }
+                });
+                thread::sleep(Duration::from_secs(600)); // 10 minutes
+            }
+        });
 
         (app, Command::none())
     }
@@ -84,10 +112,10 @@ impl Application for YourApp {
     ///
     /// To get a better sense of which widgets are available, check out the `widget` module.
     fn view(&self) -> Element<Self::Message> {
-        self.core
-            .applet
-            .icon_button("display-symbolic")
+        let exchange_rate = self.exchange_rate.lock().unwrap().clone();
+        cosmic::widget::button::text(exchange_rate)
             .on_press(Message::TogglePopup)
+            .style(cosmic::theme::Button::AppletIcon)
             .into()
     }
 
@@ -97,9 +125,12 @@ impl Application for YourApp {
             .spacing(0)
             .add(settings::item(
                 fl!("example-row"),
-                widget::toggler(None, self.example_row, |value| {
-                    Message::ToggleExampleRow(value)
-                }),
+                // Shows a text input that allows the user to enter a string for the exchange rate to show.
+                // For example USDEUR for USD to EUR exchange rate
+                TextInput::new("Enter exchange rate", &self.input_value)
+                    .on_input(Message::InputChanged)
+                    .padding(10)
+                    .size(20),
             ));
 
         self.core.applet.popup_container(content_list).into()
@@ -133,7 +164,9 @@ impl Application for YourApp {
                     self.popup = None;
                 }
             }
-            Message::ToggleExampleRow(toggled) => self.example_row = toggled,
+            Message::InputChanged(new_value) => {
+                self.input_value = new_value;
+            }
         }
         Command::none()
     }
@@ -141,4 +174,18 @@ impl Application for YourApp {
     fn style(&self) -> Option<<Theme as application::StyleSheet>::Style> {
         Some(cosmic::applet::style())
     }
+}
+
+async fn fetch_exchange_rate(input_value: &str) -> Result<String, Error> {
+    // Get the first 3 letter from the input_value
+    let from_currency = &input_value[..3];
+    // Get the last 3 letter from the input_value
+    let to_currency = &input_value[3..];
+    let response = reqwest::get(format!(
+        "https://economia.awesomeapi.com.br/last/{from_currency}-{to_currency}",
+    ))
+    .await?
+    .json::<Value>()
+    .await?;
+    Ok(response[input_value]["bid"].to_string())
 }
