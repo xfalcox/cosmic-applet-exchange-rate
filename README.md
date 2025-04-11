@@ -1,30 +1,49 @@
-# COSMIC Applet Template
+# COSMIC Exchange Rate Applet
 
-A template for COSMIC applets.
+A COSMIC panel applet for displaying live currency exchange rates.
 
-## Getting Started
+## Features
 
-To get started, click the "Use this template" button above. This will create a new repository in your account with the contents of this template.
+- Display current exchange rates in the COSMIC panel
+- Configure source and target currencies
+- Automatically updates rates every 5 minutes
+- Click to open configuration panel
 
-Once you have created a new repository from this template, you can clone it to your local machine and start developing your COSMIC applet.
+## How It Works
+
+This applet fetches real-time currency exchange rates from the AwesomeAPI (https://economia.awesomeapi.com.br/) and displays them in the COSMIC panel. The exchange rate is shown in a format like "$4.95" to represent the current rate between the selected currencies.
+
+Default configuration:
+- Source currency: USD (United States Dollar)
+- Target currency: BRL (Brazilian Real)
 
 ## Development
 
-When you open the repository in your code editor, you will see a lot of comments in the code. These comments are there to help you get a basic understanding of what each part of the code does.
+This applet is built using the COSMIC Rust framework. The main components are:
 
-Once you feel comfortable with it, refer back to the [COSMIC documentation](https://pop-os.github.io/libcosmic/cosmic/) for more information on how to build COSMIC applets.
+- `src/app.rs`: Core applet functionality and UI
+- `src/main.rs`: Application entry point
+- `i18n/`: Internationalization files
 
-## Install
+Refer to the [COSMIC documentation](https://pop-os.github.io/libcosmic/cosmic/) for more information on how to build COSMIC applets.
 
-To install your COSMIC applet, you will need [just](https://github.com/casey/just), if you're on Pop!\_OS, you can install it with the following command:
+## Installation
+
+To install the applet, you need [just](https://github.com/casey/just). If you're on Pop!_OS, install it with:
 
 ```sh
 sudo apt install just
 ```
 
-After you install it, you can run the following commands to build and install your applet:
+Then build and install the applet:
 
 ```sh
 just build-release
 sudo just install
 ```
+
+After installation, open COSMIC settings, select "Desktop" → "Panel" → "Configure panel applets" and add the "Exchange Rate" applet to your panel.
+
+## License
+
+This project is licensed under GPL-3.0-only license.
