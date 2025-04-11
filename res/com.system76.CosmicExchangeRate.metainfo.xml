@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.system76.CosmicExchangeRate</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <project_group>COSMIC</project_group>
+  <developer_name>COSMIC Team</developer_name>
+  <update_contact>info@system76.com</update_contact>
+  <url type="homepage">https://github.com/pop-os/cosmic</url>
+  <url type="bugtracker">https://github.com/pop-os/cosmic/issues</url>
+  <name>Exchange Rate</name>
+  <summary>Currency exchange rate applet for COSMIC</summary>
+  <description>
+    <p>A COSMIC applet to display live currency exchange rates</p>
+  </description>
+  <launchable type="desktop-id">com.system76.CosmicExchangeRate.desktop</launchable>
+  <icon type="stock">com.system76.CosmicExchangeRate</icon>
+  <screenshots>
+  </screenshots>
+  <provides>
+    <mimetypes>
+      <mimetype>text/plain</mimetype>
+    </mimetypes>
+    <binaries>
+      <binary>cosmic-exchange-rate</binary>
+    </binaries>
+  </provides>
+</component>

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Exchange Rate
+Exec=cosmic-exchange-rate %F
+Terminal=false
+Type=Application
+StartupNotify=true
+Icon=com.system76.CosmicExchangeRate
+Categories=COSMIC;Utility;
+Keywords=Currency;Exchange;Rate;Money;
+MimeType=text/plain;
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
