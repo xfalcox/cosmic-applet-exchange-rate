@@ -22,6 +22,7 @@ struct ExchangeRate {
     code: String,
     codein: String,
     bid: String,
+    varBid: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,12 +41,16 @@ pub struct ExchangeRateApp {
     popup: Option<Id>,
     /// Current exchange rate
     exchange_rate: Option<f64>,
+    /// Current variation
+    variation: Option<f64>,
     /// From currency
     from_currency: String,
     /// To currency
     to_currency: String,
     /// Error message if any
     error: Option<String>,
+    /// Show variation
+    show_variation: bool,
     /// Rectangle tracker for autosize
     rectangle_tracker: Option<RectangleTracker<u32>>,
     /// Rectangle for popup positioning
@@ -62,7 +67,8 @@ pub enum Message {
     UpdateExchangeRate,
     SetFromCurrency(String),
     SetToCurrency(String),
-    ExchangeRateUpdated(Result<f64, String>),
+    ExchangeRateUpdated(Result<(f64, f64), String>),
+    ToggleVariationDisplay(bool),
     Rectangle(RectangleUpdate<u32>),
 }
 
@@ -105,6 +111,7 @@ impl Application for ExchangeRateApp {
             core,
             from_currency: "USD".to_string(),
             to_currency: "BRL".to_string(),
+            show_variation: true,
             ..Default::default()
         };
         
@@ -146,8 +153,14 @@ impl Application for ExchangeRateApp {
         
         // Create the display text for the applet - SIMPLIFIED VERSION
         let display_text = if let Some(rate) = self.exchange_rate {
-            // Format with exactly 2 decimal places
-            format!("${:.2}", rate)
+            // Format with exactly 2 decimal places and add variation if available and enabled
+            if self.show_variation && self.variation.is_some() {
+                let var = self.variation.unwrap();
+                let var_sign = if var > 0.0 { "+" } else { "" };
+                format!("${:.2} ({}{})", rate, var_sign, format!("{:.2}", var).trim())
+            } else {
+                format!("${:.2}", rate)
+            }
         } else if let Some(_error) = &self.error {
             "Error".to_string()
         } else {
@@ -199,8 +212,8 @@ impl Application for ExchangeRateApp {
                 .on_input(Message::SetFromCurrency))
             .add(widget::text_input("To Currency", &self.to_currency)
                 .on_input(Message::SetToCurrency))
-            .add(widget::button::standard("Update Now")
-                .on_press(Message::UpdateExchangeRate));
+            .add(widget::checkbox("Show variation", self.show_variation)
+                .on_toggle(Message::ToggleVariationDisplay));
 
         self.core.applet.popup_container(content_list).into()
     }
@@ -261,7 +274,7 @@ impl Application for ExchangeRateApp {
                 return Task::perform(
                     async move {
                         match fetch_exchange_rate(&from, &to).await {
-                            Ok(rate) => Message::ExchangeRateUpdated(Ok(rate)),
+                            Ok((rate, variation)) => Message::ExchangeRateUpdated(Ok((rate, variation))),
                             Err(e) => Message::ExchangeRateUpdated(Err(e)),
                         }
                     },
@@ -282,18 +295,23 @@ impl Application for ExchangeRateApp {
                     |msg| Action::App(msg),
                 );
             }
+            Message::ToggleVariationDisplay(show) => {
+                self.show_variation = show;
+            }
             Message::ExchangeRateUpdated(result) => {
                 match result {
-                    Ok(rate) => {
-                        writeln!(std::io::stderr(), "DEBUG UPDATE: Exchange rate updated successfully: {} (formatted as {:.2})", 
-                                 rate, rate).ok();
+                    Ok((rate, variation)) => {
+                        writeln!(std::io::stderr(), "DEBUG UPDATE: Exchange rate updated successfully: {} (formatted as {:.2}) with variation {}", 
+                                 rate, rate, variation).ok();
                         self.exchange_rate = Some(rate);
+                        self.variation = Some(variation);
                         self.error = None;
                     }
                     Err(e) => {
                         writeln!(std::io::stderr(), "DEBUG UPDATE: Exchange rate update failed: {}", e).ok();
                         self.error = Some(e);
                         self.exchange_rate = None;
+                        self.variation = None;
                     }
                 }
             }
@@ -310,7 +328,7 @@ impl Application for ExchangeRateApp {
     }
 }
 
-async fn fetch_exchange_rate(from: &str, to: &str) -> Result<f64, String> {
+async fn fetch_exchange_rate(from: &str, to: &str) -> Result<(f64, f64), String> {
     let url = format!("https://economia.awesomeapi.com.br/last/{}-{}", from, to);
     
     // Log fetch attempt
@@ -359,17 +377,41 @@ async fn fetch_exchange_rate(from: &str, to: &str) -> Result<f64, String> {
             if let Some(bid_str) = bid.as_str() {
                 writeln!(std::io::stderr(), "DEBUG: Got bid string: {}", bid_str).ok();
                 
-                match bid_str.parse::<f64>() {
-                    Ok(rate) => {
-                        writeln!(std::io::stderr(), "DEBUG: Parsed rate: {} (formatted: {:.2})", rate, rate).ok();
-                        return Ok(rate);
-                    },
+                let rate = match bid_str.parse::<f64>() {
+                    Ok(rate) => rate,
                     Err(e) => {
                         let err_msg = format!("Failed to parse rate string '{}': {}", bid_str, e);
                         writeln!(std::io::stderr(), "DEBUG: {}", err_msg).ok();
                         return Err(err_msg);
                     }
-                }
+                };
+                
+                // Get varBid (variation)
+                let variation = if let Some(var_bid) = rate_obj.get("varBid") {
+                    if let Some(var_str) = var_bid.as_str() {
+                        writeln!(std::io::stderr(), "DEBUG: Got varBid string: {}", var_str).ok();
+                        
+                        match var_str.parse::<f64>() {
+                            Ok(v) => v, // Use the raw variation value
+                            Err(e) => {
+                                let err_msg = format!("Failed to parse varBid string '{}': {}", var_str, e);
+                                writeln!(std::io::stderr(), "DEBUG: {}", err_msg).ok();
+                                // Continue with rate only if we can't parse variation
+                                0.0
+                            }
+                        }
+                    } else {
+                        writeln!(std::io::stderr(), "DEBUG: varBid value is not a string").ok();
+                        0.0
+                    }
+                } else {
+                    writeln!(std::io::stderr(), "DEBUG: No 'varBid' field in rate object").ok();
+                    0.0
+                };
+                
+                writeln!(std::io::stderr(), "DEBUG: Parsed rate: {} (formatted: {:.2}) with variation: {}", 
+                         rate, rate, variation).ok();
+                return Ok((rate, variation));
             } else {
                 let err_msg = format!("Bid value is not a string: {:?}", bid);
                 writeln!(std::io::stderr(), "DEBUG: {}", err_msg).ok();
