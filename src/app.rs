@@ -314,6 +314,15 @@ impl Application for ExchangeRateApp {
                         self.variation = None;
                     }
                 }
+                
+                // Schedule the next update in 5 minutes
+                return Task::perform(
+                    async {
+                        tokio::time::sleep(Duration::from_secs(300)).await;
+                        Message::UpdateExchangeRate
+                    },
+                    |msg| Action::App(msg),
+                );
             }
         }
         Task::none()
